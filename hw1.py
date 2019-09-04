@@ -12,6 +12,8 @@ http://www.math.pitt.edu/~sussmanm/2071/lab03/index.html
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Callable
+# Use scipy to confirm that my methods are working.
+from scipy.integrate import solve_ivp
 
 # Tolerance and maximum iterations for Newton's method.
 EPS = 0.0001
@@ -178,6 +180,14 @@ def p1_func(x):
     )
 
 
+# noinspection PyUnusedLocal
+def p1_func_wrapper(t, x):
+    """Wrapper to call p1_func but accept a 't' argument. This is for
+    verification with scipy.
+    """
+    return p1_func(x)
+
+
 def p1_jac(x: np.ndarray):
     """Function to evaluate the Jacobian matrix for problem 1.
 
@@ -276,11 +286,13 @@ def p1():
     plot(x=x_rk2,
          title="Problem 2, Runge-Kutte.", dt=dt, t_end=t_end,
          out_file="hw1_p1_rk2.eps")
-    # plt.figure()
-    #
-    # plt.plot(x_rk2)
-    # plt.title('RK2')
-    # plt.show()
+
+    # Confirm with scipy.
+    result_scipy = solve_ivp(fun=p1_func_wrapper, t_span=(0, t_end),
+                             y0=x_0, max_step=dt)
+    plot(x=result_scipy['y'].T,
+         title="Problem 1, Using Scipy.", dt=dt, t_end=t_end,
+         out_file='hw1_p1_scipy.eps')
 
 
 def p2_func(x):
@@ -301,6 +313,14 @@ def p2_func(x):
             x[0] * x[1] - 8 / 3 * x[2]
         ]
     )
+
+
+# noinspection PyUnusedLocal
+def p2_func_wrapper(t, x):
+    """Wrapper to call p2_func but accept a 't' argument. This is for
+    verification with scipy.
+    """
+    return p2_func(x)
 
 
 def p2_jac(x):
@@ -353,6 +373,13 @@ def p2():
                                               j=p2_jac, dt=dt, t_end=t_end)
     plot(x=x_trap, title="Problem 2, Implicit Trapezoidal via Newton's method",
          dt=dt, t_end=t_end, out_file='hw_p2_trap.eps')
+
+    # Confirm with scipy.
+    result_scipy = solve_ivp(fun=p2_func_wrapper, t_span=(0, t_end),
+                             y0=x_0, max_step=dt)
+    plot(x=result_scipy['y'].T,
+         title="Problem 2, Using Scipy.", dt=dt, t_end=t_end,
+         out_file='hw2_p1_scipy.eps')
 
 
 def plot(x, title, dt, t_end, out_file):
