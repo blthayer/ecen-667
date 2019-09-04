@@ -1,3 +1,6 @@
+# Don't add figures to the repo.
+*.eps
+
 # Ignore PyCharm stuff.
 .idea/**
 

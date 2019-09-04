@@ -1,12 +1,21 @@
 """Author: Brandon Thayer
 Module for homework 1.
+
+There's a "main" method which solves problems 1 and 2.
+
+The following web pages were useful:
+https://en.wikipedia.org/wiki/Trapezoidal_rule_(differential_equations)
+https://homepage.math.uiowa.edu/~ljay/publications.dir/EACM_Lobatto_Methods.pdf
+http://www.math.pitt.edu/~sussmanm/2071/lab03/index.html
 """
+# Imports
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Callable
 
-# Tolerance for Newton's method.
+# Tolerance and maximum iterations for Newton's method.
 EPS = 0.0001
+MAX_ITERATIONS = 100
 
 
 def newton(x_0: np.ndarray, f: Callable[[np.ndarray], np.ndarray],
@@ -17,6 +26,12 @@ def newton(x_0: np.ndarray, f: Callable[[np.ndarray], np.ndarray],
     :param f: Function of x.
     :param j: Jacobian of f.
     :param eps: epsilon: tolerance for stopping iteration.
+
+    :returns: x, numpy array of the same shape as x_0, containing the
+        root of f.
+
+    :raises UserWarning: If MAX_ITERATIONS is exceeded when finding the
+        root.
     """
     # Initialize f(x).
     f_x = f(x_0)
@@ -29,7 +44,7 @@ def newton(x_0: np.ndarray, f: Callable[[np.ndarray], np.ndarray],
 
     # Loop while we do not have all our entries within the given
     # tolerance. Use a hard-coded iteration cap for safety.
-    while (not np.all(np.abs(f_x) < eps)) and (i < 100):
+    while (not np.all(np.abs(f_x) < eps)) and (i < MAX_ITERATIONS):
         # Increment iteration counter.
         i += 1
 
@@ -39,7 +54,8 @@ def newton(x_0: np.ndarray, f: Callable[[np.ndarray], np.ndarray],
         # Re-compute f_x for the next iteration.
         f_x = f(x)
 
-    if i >= 100:
+    # Raise an exception if Newton's method didn't converge.
+    if i >= MAX_ITERATIONS:
         raise UserWarning('Iteration count exceeded!')
 
     # All done. Return our final x.
@@ -70,24 +86,30 @@ def init_x(x_0, t_end, t_start, dt):
     return x
 
 
-def trap_int(x_0: np.ndarray, f: Callable[[np.ndarray], np.ndarray],
-             j: Callable[[np.ndarray], np.ndarray], dt: float, t_end: float,
-             t_start=0.0):
+def implicit_trapezoidal_integration(
+        x_0: np.ndarray, f: Callable[[np.ndarray], np.ndarray],
+        j: Callable[[np.ndarray], np.ndarray], dt: float, t_end: float,
+        t_start=0.0):
     """Implicit trapezoidal integration.
 
     :param x_0: Initial conditions, one dimensional.
     :param f: Function of x.
-    :param j: Function to evaluate the Jacobian of f(x)
+    :param j: Function to evaluate Jacobian(x), where the Jacobian is
+        for the function f.
     :param dt: Time step to use.
     :param t_end: Ending time.
     :param t_start: Starting t.
+
+    :returns: x, numpy array with as many rows as time steps, and as
+        many columns as variables in x_0. Contains the numerical
+        integration results for each time step.
     """
     # Initialize our x matrix.
     x = init_x(x_0=x_0, t_start=t_start, t_end=t_end, dt=dt)
 
     # Evaluate for each time step.
     for idx in range(1, x.shape[0]):
-        # Grab this x for convenient.
+        # Grab this x for convenience.
         x_n = x[idx - 1, :]
 
         # Get a function for evaluating the trapezoidal equation.
@@ -101,6 +123,7 @@ def trap_int(x_0: np.ndarray, f: Callable[[np.ndarray], np.ndarray],
         # equation via Newton's method.
         x[idx, :] = newton(x_0=x[idx, :], j=trap_jac, f=trap_eq)
 
+    # All done, return the solution.
     return x
 
 
@@ -113,6 +136,10 @@ def rk2(x_0: np.ndarray, f: Callable[[np.ndarray], np.ndarray], dt: float,
     :param dt: Time step to use.
     :param t_end: Ending time. Float.
     :param t_start: Starting t, defaults to 0.
+
+    :returns: x, numpy array with as many rows as time steps, and as
+        many columns as variables in x_0. Contains the numerical
+        integration results for each time step.
     """
     # Initialize our x matrix.
     x = init_x(x_0=x_0, t_start=t_start, t_end=t_end, dt=dt)
@@ -122,19 +149,15 @@ def rk2(x_0: np.ndarray, f: Callable[[np.ndarray], np.ndarray], dt: float,
         # Extract the previous x for convenience.
         x_n = x[idx - 1, :]
 
+        # Compute k1 and k2
         k1 = dt * f(x_n)
         k2 = dt * f(x_n + k1)
+
+        # Evaluate x for this time step.
         x[idx, :] = x_n + (k1 + k2) / 2
 
+    # All done, return the solution.
     return x
-
-
-def main():
-    # Problem 1:
-    # TODO:
-
-    # Problem 2:
-    p2()
 
 
 def p1_func(x):
@@ -155,8 +178,11 @@ def p1_func(x):
     )
 
 
-def p1_jac(x):
-    """Function to compute the Jacobian matrix for problem 1.
+def p1_jac(x: np.ndarray):
+    """Function to evaluate the Jacobian matrix for problem 1.
+
+    :param x: Numpy array of shape (2,) corresponding to x1 and x2
+        for problem 1.
     """
     return np.array(
         [
@@ -173,14 +199,39 @@ def p1_jac(x):
 
 
 def trap_eq_factory(x_n, dt, f):
+    """Factory function to return a function for evaluating the
+    trapezoidal integration function. This returns a function of
+    x_(n+1) (x at the next time step) for the given current x (x_n),
+    time step (dt), and function (f).
+
+    :param x_n: one-dimensional numpy array giving the values of x at
+        the current time step.
+    :param dt: Time step.
+    :param f: Function of x.
+
+    :returns: trap_eq, callable which takes x_(n+1) and evaluates the
+        trapezoidal formula.
+    """
 
     def trap_eq(x_n_1):
+        """Simply write up the trapezoidal formula."""
         return x_n_1 - x_n - dt / 2 * (f(x_n) + f(x_n_1))
 
+    # Return our new function.
     return trap_eq
 
 
 def trap_jac_factory(j, dt):
+    """Factory function to return a function for evaluating the Jacobian
+    of the trapezoidal formula. This returns a function of x_n (x at
+    this time step).
+
+    :param j: Jacobian of the function of x.
+    :param dt: time step.
+
+    :returns: trap_jac, callable which takes x_n and evaluates the
+        Jacobian of the trapezoidal formula.
+    """
 
     def trap_jac(x_n):
         """Function to compute the Jacobian of the implicit trapezoidal
@@ -192,23 +243,44 @@ def trap_jac_factory(j, dt):
 
 
 def p1():
-    """Problem 1."""
+    """Problem 1.
+
+    This function doesn't return anything, but saves hw1_p1.eps to file.
+    """
+    # Initial conditions.
     x_0 = np.array([1, 1])
 
     # Test out our root finding method. Spoiler: it works.
     # root = newton(x_0, p1_func, p1_jac, eps=0.0001)
-    dt = 0.01
-    t_end = 5
-    x_trap = trap_int(x_0=x_0, f=p1_func, j=p1_jac, dt=dt, t_end=t_end)
-    plt.title('Trapezoidal')
-    plt.plot(x_trap)
-    plt.figure()
-    x_rk2 = rk2(x_0=x_0, f=p1_func, dt=dt, t_end=t_end)
-    plt.plot(x_rk2)
-    plt.title('RK2')
-    plt.show()
 
-    pass
+    # Set our time step (dt) and ending time (t_end).
+    dt = 0.01
+    t_end = 20
+
+    # Notes:
+    # t_end = 5 is not long enough to see what's going on.
+    # t_end = 10: same
+    # t_end = 100: See lots of oscillations
+    # t_end =
+
+    # Perform the trapezoidal integration.
+    x_trap = implicit_trapezoidal_integration(x_0=x_0, f=p1_func, j=p1_jac,
+                                              dt=dt, t_end=t_end)
+    plot(x=x_trap,
+         title="Problem 1, Implicit Trapezoidal Integration via Newton's "
+               "Method.", dt=dt, t_end=t_end, out_file='hw1_p1_trap.eps')
+
+    # Ensure our trapezoidal method looks similar to the rk2 results.
+    # Spoiler: they do.
+    x_rk2 = rk2(x_0=x_0, f=p1_func, dt=dt, t_end=t_end)
+    plot(x=x_rk2,
+         title="Problem 2, Runge-Kutte.", dt=dt, t_end=t_end,
+         out_file="hw1_p1_rk2.eps")
+    # plt.figure()
+    #
+    # plt.plot(x_rk2)
+    # plt.title('RK2')
+    # plt.show()
 
 
 def p2_func(x):
@@ -231,8 +303,29 @@ def p2_func(x):
     )
 
 
+def p2_jac(x):
+    """Function to evaluate the Jacobian for problem 2. While this
+    is not needed for Runge-Kutte, it's useful so we can compare the
+    RK results with trapezoidal integration.
+
+    :param x: numpy array with three elements.
+    :returns: J(x), a 3x3 numpy array.
+    """
+    return np.array(
+        [
+            [-10, 10, 0],
+            [28 - x[2], -1, -x[0]],
+            [x[1], x[0], -8/3]
+        ]
+    )
+
+
 def p2():
-    """Problem 2."""
+    """Problem 2.
+
+    This function doesn't return anything, but saves hw1_p1.eps to file.
+    """
+    # Initial conditions.
     x_0 = np.array([5, 5, 5])
 
     # Notes on dt and t_end:
@@ -251,12 +344,38 @@ def p2():
     dt = 0.01
     t_end = 5
 
-    x = rk2(x_0=x_0, f=p2_func, dt=dt, t_end=t_end)
+    x_rk2 = rk2(x_0=x_0, f=p2_func, dt=dt, t_end=t_end)
+    plot(x=x_rk2, title='Problem 2, Runge-Kutte', dt=dt, t_end=t_end,
+         out_file='hw_p2_rk2.eps')
+
+    # Do trapezoidal integration to confirm.
+    x_trap = implicit_trapezoidal_integration(x_0=x_0, f=p2_func,
+                                              j=p2_jac, dt=dt, t_end=t_end)
+    plot(x=x_trap, title="Problem 2, Implicit Trapezoidal via Newton's method",
+         dt=dt, t_end=t_end, out_file='hw_p2_trap.eps')
+
+
+def plot(x, title, dt, t_end, out_file):
+    """Hacky helper for plotting."""
+    plt.figure()
     plt.plot(x)
+    plt.title('{}'.format(title) + '\n'
+              + r"$\Delta t = {}$, End Time = {} seconds".format(dt, t_end))
+    plt.xlabel('Time steps')
+    plt.ylabel('$F(t, x)$')
+    plt.legend(['x' + str(x) for x in range(1, x.shape[1] + 1)])
+    plt.savefig(out_file)
+
+
+def main():
+    """Run methods to solve problems 1 and 2."""
+    # Problem 1:
+    p1()
+    # Problem 2:
+    p2()
+    # Show plots.
     plt.show()
 
 
 if __name__ == '__main__':
-    p1()
-    # p2()
-    # main()
+    main()
