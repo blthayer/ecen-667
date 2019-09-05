@@ -394,12 +394,153 @@ def plot(x, title, dt, t_end, out_file):
     plt.savefig(out_file)
 
 
+# noinspection PyPep8Naming
+def p3():
+    """Problem 3."""
+    # Given parameters/functions.
+
+    # L prime (H/mi).
+    l_p = 2.18 * 10**-3
+
+    # C prime (F/mi).
+    c_p = 0.0136 * 10**-6
+
+    # Line length (mi).
+    d = 225
+
+    # Sending end perfect voltage source.
+    def get_v_k(t):
+        """Return sending end voltage in Volts, given t."""
+        return 188000*np.cos(2 * np.pi * 60 * t)
+
+    # Derived parameters.
+
+    # velocity of propagation (mi/s)
+    v_p = 1 / (l_p * c_p) ** 0.5
+
+    # tao (time for wave to reach end of line, seconds)
+    tao = d / v_p
+
+    # Use time step of tao / 6
+    ts = 6
+    dt = tao / ts
+
+    # Characteristic impedance (Ohms)
+    z_c = (l_p / c_p) ** 0.5
+
+    # noinspection PyPep8Naming
+    def get_I_k(idx, i_m, v_m):
+        try:
+            # TODO: Is this idx - ts bit correct?
+            return i_m[idx - ts] - (1 / z_c) * v_m[idx - ts]
+        except IndexError:
+            return 0
+
+    # noinspection PyPep8Naming
+    def get_I_m(idx, i_k, v_k):
+        try:
+            # TODO: Is this idx - ts bit correct?
+            return i_k[idx - ts] + (1 / z_c) * v_k[idx - ts]
+        except IndexError:
+            return 0
+
+    # noinspection PyPep8Naming
+    def get_i_k(v_k, I_k):
+        """
+        This incorporates our 5 Ohm switch.
+        i_k * 5 + i_(z_c) * z_c = v_k
+        i_k - i_(z_c) = I_k
+
+        :param v_k:
+        :param I_k:
+        :return:
+        """
+        # Define the matrix for our system of equations.
+        a = np.array(
+            [
+                [5, z_c],
+                [1, -1]
+            ]
+        )
+
+        # Define the vector for our system of equations.
+        b = np.array(
+            [v_k, I_k]
+        )
+
+        result = np.linalg.solve(a, b)
+
+        # In the way this is formulated, i_k is the first element of
+        # the result.
+        return result[0]
+
+    # noinspection PyPep8Naming
+    def get_v_m(I_m):
+        """
+        Combine Z_c and R_load in parallel to get Z_total. Then we
+        can easily compute v_m.
+        :param I_m:
+        :return:
+        """
+        # This could be done outside the function...
+        z_tot = z_c * 300 / (z_c + 300)
+        return I_m * z_tot
+
+    def get_i_m(v_m):
+        """If we have v_m, i_m is computed via Ohm's law."""
+        return v_m / 300
+
+    # Get an array of our time steps for convenience.
+    t_steps = np.arange(0, 0.04 + dt, dt)
+
+    # Initialize arrays to hold our values.
+    v_k_arr = np.zeros_like(t_steps)
+    I_k_arr = np.zeros_like(t_steps)
+    I_m_arr = np.zeros_like(t_steps)
+    i_k_arr = np.zeros_like(t_steps)
+    i_m_arr = np.zeros_like(t_steps)
+    v_m_arr = np.zeros_like(t_steps)
+
+    for i, t in enumerate(t_steps):
+        # Start by computing v_k
+        v_k_arr[i] = get_v_k(t)
+
+        # Compute I_k and I_m
+        I_k_arr[i] = get_I_k(i, i_m_arr, v_m_arr)
+        I_m_arr[i] = get_I_m(i, i_k_arr, v_k_arr)
+
+        # Compute sending current.
+        i_k_arr[i] = get_i_k(v_k_arr[i], I_k_arr[i])
+
+        # Compute receiving voltage.
+        v_m_arr[i] = get_v_m(I_m_arr[i])
+
+        # Compute receiving current.
+        i_m_arr[i] = get_i_m(v_m_arr[i])
+
+    plt.plot(t_steps, v_k_arr, t_steps, v_m_arr)
+    plt.title('Problem 3, Voltages')
+    plt.xlabel('Time')
+    plt.ylabel('Voltage (Volts)')
+    plt.legend(['Sending', 'Receiving'])
+
+    plt.figure()
+    plt.plot(t_steps, i_k_arr, t_steps, i_m_arr)
+    plt.title('Problem 3, Currents')
+    plt.xlabel('Time')
+    plt.ylabel('Current (Amps)')
+    plt.legend(['Sending', 'Receiving'])
+
+
 def main():
     """Run methods to solve problems 1 and 2."""
-    # Problem 1:
-    p1()
-    # Problem 2:
-    p2()
+    # # Problem 1:
+    # p1()
+    # # Problem 2:
+    # p2()
+    # Problem 3:
+    p3()
+
     # Show plots.
     plt.show()
 
