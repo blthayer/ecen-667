@@ -518,6 +518,7 @@ def p3():
         # Compute receiving current.
         i_m_arr[i] = get_i_m(v_m_arr[i])
 
+    plt.figure()
     plt.plot(t_steps, v_k_arr, t_steps, v_m_arr)
     plt.title('Problem 3, Voltages')
     plt.xlabel('Time')
@@ -534,10 +535,10 @@ def p3():
 
 def main():
     """Run methods to solve problems 1 and 2."""
-    # # Problem 1:
-    # p1()
-    # # Problem 2:
-    # p2()
+    # Problem 1:
+    p1()
+    # Problem 2:
+    p2()
     # Problem 3:
     p3()
 
