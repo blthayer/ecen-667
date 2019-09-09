@@ -1,7 +1,7 @@
 """Author: Brandon Thayer
 Module for homework 1.
 
-There's a "main" method which solves problems 1 and 2.
+There's a "main" method which solves problems 1, 2, and 3.
 
 The following web pages were useful:
 https://en.wikipedia.org/wiki/Trapezoidal_rule_(differential_equations)
@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from typing import Callable
 # Use scipy to confirm that my methods are working.
 from scipy.integrate import solve_ivp
+import utils
 
 # Tolerance and maximum iterations for Newton's method.
 EPS = 0.0001
@@ -260,11 +261,8 @@ def p1():
     # Initial conditions.
     x_0 = np.array([1, 1])
 
-    # Test out our root finding method. Spoiler: it works.
-    # root = newton(x_0, p1_func, p1_jac, eps=0.0001)
-
     # Set our time step (dt) and ending time (t_end).
-    dt = 0.01
+    dt = 0.1
     t_end = 20
 
     # Notes:
@@ -284,15 +282,25 @@ def p1():
     # Spoiler: they do.
     x_rk2 = rk2(x_0=x_0, f=p1_func, dt=dt, t_end=t_end)
     plot(x=x_rk2,
-         title="Problem 2, Runge-Kutte.", dt=dt, t_end=t_end,
+         title="Problem 1, Runge-Kutte.", dt=dt, t_end=t_end,
          out_file="hw1_p1_rk2.eps")
 
     # Confirm with scipy.
     result_scipy = solve_ivp(fun=p1_func_wrapper, t_span=(0, t_end),
                              y0=x_0, max_step=dt)
+
+    # noinspection PyTypeChecker
     plot(x=result_scipy['y'].T,
          title="Problem 1, Using Scipy.", dt=dt, t_end=t_end,
          out_file='hw1_p1_scipy.eps')
+
+    # Find two equilibrium points.
+    root1 = newton(x_0, p1_func, p1_jac, eps=EPS)
+    root2 = newton(-1*root1, p1_func, p1_jac, eps=EPS)
+
+    print('Roots for problem 1:')
+    print(utils.b_matrix(root1.reshape(-1, 1)))
+    print(utils.b_matrix(root2.reshape(-1, 1)))
 
 
 def p2_func(x):
@@ -364,22 +372,31 @@ def p2():
     dt = 0.01
     t_end = 5
 
+    # Solve the initial value problem via Rugne-Kutta
     x_rk2 = rk2(x_0=x_0, f=p2_func, dt=dt, t_end=t_end)
-    plot(x=x_rk2, title='Problem 2, Runge-Kutte', dt=dt, t_end=t_end,
-         out_file='hw_p2_rk2.eps')
+    plot(x=x_rk2, title='Problem 2, Runge-Kutta', dt=dt, t_end=t_end,
+         out_file='hw1_p2_rk2.eps')
 
     # Do trapezoidal integration to confirm.
     x_trap = implicit_trapezoidal_integration(x_0=x_0, f=p2_func,
                                               j=p2_jac, dt=dt, t_end=t_end)
     plot(x=x_trap, title="Problem 2, Implicit Trapezoidal via Newton's method",
-         dt=dt, t_end=t_end, out_file='hw_p2_trap.eps')
+         dt=dt, t_end=t_end, out_file='hw1_p2_trap.eps')
 
     # Confirm with scipy.
     result_scipy = solve_ivp(fun=p2_func_wrapper, t_span=(0, t_end),
                              y0=x_0, max_step=dt)
+
+    # noinspection PyTypeChecker
     plot(x=result_scipy['y'].T,
          title="Problem 2, Using Scipy.", dt=dt, t_end=t_end,
-         out_file='hw2_p1_scipy.eps')
+         out_file='hw1_p2_scipy.eps')
+
+    # Solve for a root.
+    root = newton(x_0, p2_func, p2_jac, eps=EPS)
+
+    print('Roots for problem 2:')
+    print(utils.b_matrix(root.reshape(-1, 1)))
 
 
 def plot(x, title, dt, t_end, out_file):
@@ -408,10 +425,16 @@ def p3():
     # Line length (mi).
     d = 225
 
+    # Load impedance (Ohms).
+    z_L = 300
+
+    # Switch impedance (Ohms).
+    z_switch = 5
+
     # Sending end perfect voltage source.
-    def get_v_k(t):
+    def get_v_k(time):
         """Return sending end voltage in Volts, given t."""
-        return 188000*np.cos(2 * np.pi * 60 * t)
+        return 188000*np.cos(2 * np.pi * 60 * time)
 
     # Derived parameters.
 
@@ -428,28 +451,40 @@ def p3():
     # Characteristic impedance (Ohms)
     z_c = (l_p / c_p) ** 0.5
 
+    # z_tot is the parallel combination of the load resistance and
+    # characteristic impedance at the receiving end circuit.
+    z_tot = z_c * z_L / (z_c + z_L)
+
     # noinspection PyPep8Naming
     def get_I_k(idx, i_m, v_m):
-        try:
-            # TODO: Is this idx - ts bit correct?
-            return i_m[idx - ts] - (1 / z_c) * v_m[idx - ts]
-        except IndexError:
+        # Get the index corresponding to tao seconds in the past.
+        t_idx = idx - ts
+        if t_idx < 0:
+            # If we're here, we tried looking too far back in time. In
+            # that case, the result is ALWAYS 0.
             return 0
+
+        # TODO: Is this idx - ts bit correct?
+        return i_m[t_idx] - (1 / z_c) * v_m[t_idx]
 
     # noinspection PyPep8Naming
     def get_I_m(idx, i_k, v_k):
-        try:
-            # TODO: Is this idx - ts bit correct?
-            return i_k[idx - ts] + (1 / z_c) * v_k[idx - ts]
-        except IndexError:
+        # Get the index corresponding to tao seconds in the past.
+        t_idx = idx - ts
+        if t_idx < 0:
+            # If we're here, we tried looking too far back in time. In
+            # that case, the result is ALWAYS 0.
             return 0
+
+        # TODO: Is this idx - ts bit correct?
+        return i_k[t_idx] + (1 / z_c) * v_k[t_idx]
 
     # noinspection PyPep8Naming
     def get_i_k(v_k, I_k):
         """
         This incorporates our 5 Ohm switch.
-        i_k * 5 + i_(z_c) * z_c = v_k
-        i_k - i_(z_c) = I_k
+        KVL: z_switch * i_k +   z_c *   i_(z_c) =   v_k
+        KCL: 1        * i_k +   -1 *    i_(z_c) =   I_k
 
         :param v_k:
         :param I_k:
@@ -458,7 +493,7 @@ def p3():
         # Define the matrix for our system of equations.
         a = np.array(
             [
-                [5, z_c],
+                [z_switch, z_c],
                 [1, -1]
             ]
         )
@@ -477,13 +512,13 @@ def p3():
     # noinspection PyPep8Naming
     def get_v_m(I_m):
         """
-        Combine Z_c and R_load in parallel to get Z_total. Then we
-        can easily compute v_m.
+        v_m is simply the voltage which results from the current I_m
+        running through the parallel combination of z_c and the load
+        impedance.
         :param I_m:
         :return:
         """
         # This could be done outside the function...
-        z_tot = z_c * 300 / (z_c + 300)
         return I_m * z_tot
 
     def get_i_m(v_m):
@@ -523,14 +558,16 @@ def p3():
     plt.title('Problem 3, Voltages')
     plt.xlabel('Time')
     plt.ylabel('Voltage (Volts)')
-    plt.legend(['Sending', 'Receiving'])
+    plt.legend(['Sending ($v_s$)', 'Receiving ($v_L$)'])
+    plt.savefig('hw1_p3_voltages.eps')
 
     plt.figure()
     plt.plot(t_steps, i_k_arr, t_steps, i_m_arr)
     plt.title('Problem 3, Currents')
     plt.xlabel('Time')
     plt.ylabel('Current (Amps)')
-    plt.legend(['Sending', 'Receiving'])
+    plt.legend(['Sending ($i_s$)', 'Receiving ($i_L$)'])
+    plt.savefig('hw1_p3_currents.eps')
 
 
 def main():
