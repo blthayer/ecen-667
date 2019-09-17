@@ -1,6 +1,8 @@
 """Module for homework 2.
 """
 import numpy as np
+from utils import b_matrix
+
 
 def main():
     # Define given variables.
@@ -149,6 +151,32 @@ def main():
                     this_r = r_g
 
                 z_primitive[i, j] = carson_self(this_r, this_gmr)
+
+    ####################################################################
+    # Kron reduction to get phase impedance matrix
+    ####################################################################
+    # Extract the phase portion of the matrix.
+    z_ij = z_primitive[0:i_g1, 0:i_g1]
+
+    # Extract phase to neutral portion.
+    z_in = z_primitive[0:i_g1, i_g1:]
+
+    # Extract the neutral to phase portion.
+    z_nj = z_primitive[i_g1:, 0:i_g1]
+
+    # Extract the neutral to neutral portion.
+    z_nn = z_primitive[i_g1:, i_g1:]
+
+    # Sanity checks
+    assert z_ij.shape[0] + z_nj.shape[0] == z_primitive.shape[0]
+    assert z_ij.shape[1] + z_in.shape[1] == z_primitive.shape[1]
+    assert z_nj.shape[1] + z_nn.shape[1] == z_primitive.shape[1]
+    assert z_in.shape[0] + z_nn.shape[0] == z_primitive.shape[0]
+
+    # Perform Kron reduction.
+    z_abc = z_ij - np.matmul(np.matmul(z_in, np.linalg.inv(z_nn)), z_nj)
+
+    print(b_matrix(z_abc))
 
     pass
 
