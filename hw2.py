@@ -1,6 +1,7 @@
 """Module for homework 2.
 """
 import numpy as np
+import cmath
 from utils import b_matrix
 
 
@@ -47,8 +48,13 @@ def p1():
                                 coordinate_array=coordinate_array,
                                 rho=120)
 
+    z_012 = phase_to_sequence(z_abc)
+
     print('Z_abc for Problem 1:')
     print(b_matrix(z_abc))
+
+    print('Z_012 for Problem 1:')
+    print(b_matrix(z_012))
 
 
 def example_4_1():
@@ -208,6 +214,28 @@ def get_phase_impedance(gmr_phase, gmr_neutral, resistance_phase,
 
     # Perform Kron reduction to get the phase impedance matrix.
     return z_ij - np.matmul(np.matmul(z_in, np.linalg.inv(z_nn)), z_nj)
+
+
+def phase_to_sequence(z):
+    """Convert the 3x3 phase impedance matrix to the 3x3 sequence
+    impedance matrix.
+
+    :param z: 3x3 numpy array representing the phase impedance matrix.
+
+    :returns z_012: 3x3 numpy array representing the sequence impedance
+        matrix.
+    """
+    # In a "real" implementation we'd want to move all this junk outside
+    # the function.
+    a_s = cmath.rect(1, 120 * np.pi / 180)
+    o = 1 + 1j*0
+    a = np.array([
+        [o, o, o],
+        [o, a_s**2, a_s],
+        [o, a_s, a_s**2]
+    ])
+
+    return np.matmul(np.matmul(np.linalg.inv(a), z), a)
 
 
 if __name__ == '__main__':
