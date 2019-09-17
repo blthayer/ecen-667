@@ -4,9 +4,8 @@ import numpy as np
 from utils import b_matrix
 
 
-def main():
-    # Define given variables.
-
+def p1():
+    """Problem 1"""
     ####################################################################
     # Phase conductors, hence the "_p" notation
     ####################################################################
@@ -17,22 +16,13 @@ def main():
     r_p = 0.0612
 
     ####################################################################
-    # Ground conductors, hence the "_g" notation
+    # Neutral conductors, hence the "_n" notation
     ####################################################################
     # GMR (ft)
-    gmr_g = 0.0217
+    gmr_n = 0.0217
 
     # Resistance per distance (Ohms/mile)
-    r_g = 0.35
-
-    ####################################################################
-    # Indices for phases
-    ####################################################################
-    i_a = 0
-    i_b = 1
-    i_c = 2
-    i_g1 = 3
-    i_g2 = 4
+    r_n = 0.35
 
     ####################################################################
     # Define conductor positions
@@ -48,49 +38,100 @@ def main():
     coord_g2 = 19 + 1j*55
 
     # Create a matrix with differences between conductors.
-    coord_arr = np.array([coord_a, coord_b, coord_c, coord_g1, coord_g2])
-    coord_mat = np.zeros((len(coord_arr), len(coord_arr)))
+    coordinate_array = np.array([coord_a, coord_b, coord_c, coord_g1,
+                                 coord_g2])
+
+    z_abc = get_phase_impedance(gmr_phase=gmr_p, gmr_neutral=gmr_n,
+                                resistance_phase=r_p, resistance_neutral=r_n,
+                                n_phase_conductors=3,
+                                coordinate_array=coordinate_array,
+                                rho=120)
+
+    print('Z_abc for Problem 1:')
+    print(b_matrix(z_abc))
+
+
+def example_4_1():
+    """Example 4.1 from Distribution System Modeling and Analysis,
+    Third Edition by William H. Kersting. Used to verify code is
+    working properly.
+    """
+    z_abc = get_phase_impedance(
+        gmr_phase=0.0244, gmr_neutral=0.00814, resistance_phase=0.306,
+        resistance_neutral=0.5920, n_phase_conductors=3,
+        coordinate_array=np.array([0+1j*29, 2.5+1j*29, 7+1j*29, 4+1j*25]),
+        rho=100
+    )
+
+    print("Z_abc for Example 4.1 From Kersting's book:")
+    print(b_matrix(z_abc))
+
+
+def get_phase_impedance(gmr_phase, gmr_neutral, resistance_phase,
+                        resistance_neutral, n_phase_conductors,
+                        coordinate_array, freq=60, rho=100):
+    """Compute the phase impedance matrix for an overhead line. To keep
+    things simple, it is assumed all phase conductors and all neutral
+    conductors are of the same type. The ordering of the
+    coordinate_array matters, so check the documentation.
+
+    :param gmr_phase: Geometric mean radius (GMR) of the phase
+        conductors (ft.).
+    :param gmr_neutral: GMR of neutral conductors (ft.).
+    :param resistance_phase: Resistance of the phase conductors in
+        Ohms/mile.
+    :param resistance_neutral: Resistance of the neutral conductors in
+        Ohms/mile
+    :param n_phase_conductors: Number of phase conductors. E.g. 3 for a
+        "single-circuit" three phase line.
+    :param coordinate_array: Numpy ndarray defining the coordinates of
+        each conductor in the complex plane. The origin should be at
+        the ground level and directly below the left-most phase
+        conductor.
+    :param freq: System frequency, defaults to 60 Hz.
+    :param rho: Earth resistivity (Ohm * m). Defaults to 100 Ohm*m.
+    """
+
+    ####################################################################
+    # Create distance matrix.
+    ####################################################################
+    # Create a matrix with differences between conductors.
+    n_cond = len(coordinate_array)
+    distance_mat = np.zeros((n_cond, n_cond))
 
     # Just use a crappy double for-loop. No need to over-optimize.
     # No, this is not the most efficient data-type either.
-    for row in range(len(coord_arr)):
-        for col in range(len(coord_arr)):
-            coord_mat[row, col] = abs(coord_arr[row] - coord_arr[col])
+    for row in range(n_cond):
+        for col in range(n_cond):
+            if row != col:
+                # Take the absolute difference between the positions.
+                distance_mat[row, col] = \
+                    abs(coordinate_array[row] - coordinate_array[col])
+            else:
+                # Fill in diagonal with the appropriate GMR.
+                if row < n_phase_conductors:
+                    distance_mat[row, row] = gmr_phase
+                else:
+                    distance_mat[row, row] = gmr_neutral
 
     # Fill in the diagonals with GMRs.
-    for idx in [i_a, i_b, i_c]:
-        coord_mat[idx, idx] = gmr_p
+    for idx in range(n_phase_conductors):
+        distance_mat[idx, idx] = gmr_phase
 
-    for idx in [i_g1, i_g2]:
-        coord_mat[idx, idx] = gmr_g
-
-    ####################################################################
-    # Compute geometric mean distances
-    ####################################################################
-    # Phase GMD (ft.)
-    gmd_p = (coord_mat[i_a, i_b] * coord_mat[i_b, i_c]
-             * coord_mat[i_c, i_a]) ** (1/3)
-
-    # Ground GMD (ft.) (note it's the same for g1 or g2 due to symmetry)
-    gmd_g = (coord_mat[i_a, i_g1] * coord_mat[i_b, i_g1]
-             * coord_mat[i_c, i_g1]) ** (1/3)
+    for idx in range(n_phase_conductors, n_cond):
+        distance_mat[idx, idx] = gmr_neutral
 
     ####################################################################
     # Constants for modified Carson equations
     ####################################################################
-    # Frequency (Hz)
-    freq = 60
 
-    # Earth resistivity (Ohm-m)
-    rho = 120
-
-    # Constants which I'm too lazy too look up it's meaning/dimensions:
+    # Constants which I'm too lazy too look up meanings/dimensions:
     real_constant = 0.00158836 * freq
     imag_constant = 1j * 0.00202237 * freq
     rf_constant = 7.6786 + 0.5 * np.log(rho / freq)
 
     ####################################################################
-    # Function for modified Carson equations
+    # Functions for modified Carson equations
     ####################################################################
 
     def carson_self(r, gmr):
@@ -104,68 +145,60 @@ def main():
         return (r + real_constant
                 + imag_constant * (np.log(1 / gmr) + rf_constant))
 
-    def carson_mutual(gmd):
+    def carson_mutual(d_ij):
         """Compute mutual impedance between conductors in Ohms/mile.
 
-        :param gmd: Geometric mean distance between the conductors.
+        :param d_ij: Distance between the conductors (ft).
 
         :returns: Mutual impedance in Ohms/mile
         """
-        return real_constant + imag_constant * (np.log(1/gmd) + rf_constant)
+        return real_constant + imag_constant * (np.log(1/d_ij) + rf_constant)
 
     ####################################################################
     # Primitive impedance matrix
     ####################################################################
     # Initialize the primitive impedance matrix.
-    z_primitive = np.zeros_like(coord_mat) + 1j * np.zeros_like(coord_mat)
+    z_primitive = 1j * np.zeros_like(distance_mat)
 
     # Sanity check
-    assert z_primitive.shape[0] == 5
-    assert z_primitive.shape[1] == 5
+    assert z_primitive.shape[0] == n_cond
+    assert z_primitive.shape[1] == n_cond
 
     # Use another double for loop to fill it in.
     for i in range(z_primitive.shape[0]):
         for j in range(z_primitive.shape[1]):
             # Off-diagonal terms.
             if i != j:
-                # WARNING: HARD-CODING.
-                # Assume matrix order is [a, b, c, g1, g2].
-                if (i < i_g1) and (j < i_g1):
-                    # Use the GMD between phases.
-                    this_gmd = gmd_p
-                else:
-                    # Use the GMD from phase to ground/neutral.
-                    this_gmd = gmd_g
-
-                # Fill it in.
-                z_primitive[i, j] = carson_mutual(this_gmd)
+                # Compute the mutual impedance, which only depends on
+                # the distance between conductors.
+                z_primitive[i, j] = carson_mutual(distance_mat[i, j])
             else:
-                # Diagonal terms.
-                # WARNING: HARD-CODING.
-                # Assume matrix order is [a, b, c, g1, g2].
-                if (i < i_g1) and (j < i_g1):
-                    this_gmr = gmr_p
-                    this_r = r_p
+                # Self impedance. This depends on the resistance as
+                # well as the GMR. Note that i = j in this case.
+                if i < n_phase_conductors:
+                    # Use phase resistance.
+                    this_r = resistance_phase
                 else:
-                    this_gmr = gmr_g
-                    this_r = r_g
+                    # Use neutral resistance.
+                    this_r = resistance_neutral
 
-                z_primitive[i, j] = carson_self(this_r, this_gmr)
+                # Compute the self impedance.
+                z_primitive[i, j] = carson_self(this_r, distance_mat[i, j])
 
     ####################################################################
     # Kron reduction to get phase impedance matrix
     ####################################################################
     # Extract the phase portion of the matrix.
-    z_ij = z_primitive[0:i_g1, 0:i_g1]
+    z_ij = z_primitive[0:n_phase_conductors, 0:n_phase_conductors]
 
     # Extract phase to neutral portion.
-    z_in = z_primitive[0:i_g1, i_g1:]
+    z_in = z_primitive[0:n_phase_conductors, n_phase_conductors:]
 
     # Extract the neutral to phase portion.
-    z_nj = z_primitive[i_g1:, 0:i_g1]
+    z_nj = z_primitive[n_phase_conductors:, 0:n_phase_conductors]
 
     # Extract the neutral to neutral portion.
-    z_nn = z_primitive[i_g1:, i_g1:]
+    z_nn = z_primitive[n_phase_conductors:, n_phase_conductors:]
 
     # Sanity checks
     assert z_ij.shape[0] + z_nj.shape[0] == z_primitive.shape[0]
@@ -173,13 +206,12 @@ def main():
     assert z_nj.shape[1] + z_nn.shape[1] == z_primitive.shape[1]
     assert z_in.shape[0] + z_nn.shape[0] == z_primitive.shape[0]
 
-    # Perform Kron reduction.
-    z_abc = z_ij - np.matmul(np.matmul(z_in, np.linalg.inv(z_nn)), z_nj)
-
-    print(b_matrix(z_abc))
-
-    pass
+    # Perform Kron reduction to get the phase impedance matrix.
+    return z_ij - np.matmul(np.matmul(z_in, np.linalg.inv(z_nn)), z_nj)
 
 
 if __name__ == '__main__':
-    main()
+    # Run problem 1.
+    p1()
+    # Run example.
+    # example_4_1()
