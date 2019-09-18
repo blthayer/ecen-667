@@ -228,11 +228,11 @@ def phase_to_sequence(z):
     # In a "real" implementation we'd want to move all this junk outside
     # the function.
     a_s = cmath.rect(1, 120 * np.pi / 180)
-    o = 1 + 1j*0
+    one = 1 + 1j*0
     a = np.array([
-        [o, o, o],
-        [o, a_s**2, a_s],
-        [o, a_s, a_s**2]
+        [one, one, one],
+        [one, a_s**2, a_s],
+        [one, a_s, a_s**2]
     ])
 
     return np.matmul(np.matmul(np.linalg.inv(a), z), a)
