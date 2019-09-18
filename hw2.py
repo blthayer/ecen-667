@@ -42,8 +42,10 @@ def p1():
     coordinate_array = np.array([coord_a, coord_b, coord_c, coord_g1,
                                  coord_g2])
 
-    z_abc = get_phase_impedance(gmr_phase=gmr_p, gmr_neutral=gmr_n,
-                                resistance_phase=r_p, resistance_neutral=r_n,
+    gmr = np.array([gmr_p] * 3 + [gmr_n] * 2)
+    resistance = np.array([r_p] * 3 + [r_n] * 2)
+
+    z_abc = get_phase_impedance(gmr=gmr, resistance=resistance,
                                 n_phase_conductors=3,
                                 coordinate_array=coordinate_array,
                                 rho=120)
@@ -62,9 +64,10 @@ def example_4_1():
     Third Edition by William H. Kersting. Used to verify code is
     working properly.
     """
+    gmr = np.array([0.0244] * 3 + [0.00814])
+    resistance = np.array([0.306] * 3 + [0.5920])
     z_abc = get_phase_impedance(
-        gmr_phase=0.0244, gmr_neutral=0.00814, resistance_phase=0.306,
-        resistance_neutral=0.5920, n_phase_conductors=3,
+        gmr=gmr, resistance=resistance, n_phase_conductors=3,
         coordinate_array=np.array([0+1j*29, 2.5+1j*29, 7+1j*29, 4+1j*25]),
         rho=100
     )
@@ -72,22 +75,37 @@ def example_4_1():
     print("Z_abc for Example 4.1 From Kersting's book:")
     print(b_matrix(z_abc))
 
+    print('Z_012 for Example 4.1:')
+    print(b_matrix(phase_to_sequence(z_abc)))
 
-def get_phase_impedance(gmr_phase, gmr_neutral, resistance_phase,
-                        resistance_neutral, n_phase_conductors,
+
+def example_4_2():
+    """Example 4.2 from Kersting's book."""
+    gmr = np.array([0.0244] * 3 + [0.0171] * 3 + [0.00814])
+    resistance = np.array([0.306] * 3 + [0.41] * 3 + [0.592])
+    coord = np.array([0+1j*35, 2.5+1j*35, 7+1j*35,
+                      2.5+1j*33, 7+1j*33, 0+1j*33,
+                      4+1j*29])
+
+    z_abc = get_phase_impedance(gmr=gmr, resistance=resistance,
+                                n_phase_conductors=6, coordinate_array=coord,
+                                rho=100)
+
+    print("Z_abc for Example 4.2 From Kersting's book:")
+    print(b_matrix(z_abc))
+
+
+def get_phase_impedance(gmr, resistance, n_phase_conductors,
                         coordinate_array, freq=60, rho=100):
-    """Compute the phase impedance matrix for an overhead line. To keep
-    things simple, it is assumed all phase conductors and all neutral
-    conductors are of the same type. The ordering of the
-    coordinate_array matters, so check the documentation.
+    """Compute the phase impedance matrix for an overhead line. All the
+    input arrays (gmr, resistance, coordinate_array) must be in the
+    same order, and should be ordered such that phase conductors are
+    all listed first, and then neutral conductors.
 
-    :param gmr_phase: Geometric mean radius (GMR) of the phase
-        conductors (ft.).
-    :param gmr_neutral: GMR of neutral conductors (ft.).
-    :param resistance_phase: Resistance of the phase conductors in
-        Ohms/mile.
-    :param resistance_neutral: Resistance of the neutral conductors in
-        Ohms/mile
+    :param gmr: Numpy array of geometric mean radii (ft.) for
+        all conductors. Should be in the same order as coordinate_array.
+    :param resistance: Numpy array of resistances (Ohm/mile) for all
+        conductors. Should be in the same order as coordinate_array.
     :param n_phase_conductors: Number of phase conductors. E.g. 3 for a
         "single-circuit" three phase line.
     :param coordinate_array: Numpy ndarray defining the coordinates of
@@ -115,17 +133,7 @@ def get_phase_impedance(gmr_phase, gmr_neutral, resistance_phase,
                     abs(coordinate_array[row] - coordinate_array[col])
             else:
                 # Fill in diagonal with the appropriate GMR.
-                if row < n_phase_conductors:
-                    distance_mat[row, row] = gmr_phase
-                else:
-                    distance_mat[row, row] = gmr_neutral
-
-    # Fill in the diagonals with GMRs.
-    for idx in range(n_phase_conductors):
-        distance_mat[idx, idx] = gmr_phase
-
-    for idx in range(n_phase_conductors, n_cond):
-        distance_mat[idx, idx] = gmr_neutral
+                distance_mat[row, row] = gmr[row]
 
     ####################################################################
     # Constants for modified Carson equations
@@ -140,16 +148,16 @@ def get_phase_impedance(gmr_phase, gmr_neutral, resistance_phase,
     # Functions for modified Carson equations
     ####################################################################
 
-    def carson_self(r, gmr):
+    def carson_self(r, g):
         """Compute the self-impedance of a conductor in Ohms/mile
 
         :param r: Resistance of conductor in Ohms/mile
-        :param gmr: Geometric mean radius of conductor in feet.
+        :param g: Geometric mean radius of conductor in feet.
 
         :returns: Self-impedance in Ohms/mile
         """
         return (r + real_constant
-                + imag_constant * (np.log(1 / gmr) + rf_constant))
+                + imag_constant * (np.log(1 / g) + rf_constant))
 
     def carson_mutual(d_ij):
         """Compute mutual impedance between conductors in Ohms/mile.
@@ -181,15 +189,10 @@ def get_phase_impedance(gmr_phase, gmr_neutral, resistance_phase,
             else:
                 # Self impedance. This depends on the resistance as
                 # well as the GMR. Note that i = j in this case.
-                if i < n_phase_conductors:
-                    # Use phase resistance.
-                    this_r = resistance_phase
-                else:
-                    # Use neutral resistance.
-                    this_r = resistance_neutral
 
                 # Compute the self impedance.
-                z_primitive[i, j] = carson_self(this_r, distance_mat[i, j])
+                z_primitive[i, j] = carson_self(resistance[i],
+                                                distance_mat[i, j])
 
     ####################################################################
     # Kron reduction to get phase impedance matrix
@@ -243,3 +246,4 @@ if __name__ == '__main__':
     p1()
     # Run example.
     # example_4_1()
+    # example_4_2()
