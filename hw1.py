@@ -77,7 +77,7 @@ def init_x(x_0, t_end, t_start, dt):
     :returns: x, numpy array with size (num time steps, len(x_0))
     """
     # Compute the number of time steps we'll use.
-    n = int(np.ceil(t_end - t_start) / dt)
+    n = int(np.ceil((t_end - t_start) / dt))
 
     # Initialize matrix.
     x = np.zeros(shape=(n, x_0.shape[0]))
