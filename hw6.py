@@ -349,7 +349,7 @@ def p4():
                 + x_p * x_arr[i_d_idx],
 
                 w_s * x_arr[s_idx] * x_arr[e_p_q_idx] - (1 / t_p_0)
-                * (x_arr[e_p_d_idx] - (x - x_p) * x_arr[i_q_idx]),
+                * (x_arr[e_p_d_idx] + (x - x_p) * x_arr[i_q_idx]),
 
                 -w_s * x_arr[s_idx] * x_arr[e_p_d_idx] - (1 / t_p_0)
                 * (x_arr[e_p_q_idx] - (x - x_p) * x_arr[i_d_idx])
@@ -375,8 +375,40 @@ def p4():
 
     print(result)
 
+
+def p5():
+    # Given:
+    r_s = 0.01
+    x_s = 0.06
+    x_m = 4
+    r_r = 0.03  # From lecture, not problem 4
+    x_r = 0.04  # From lecture, not problem 4
+    w_s = cmath.pi * 2 * 60
+
+    # Voltage: given, 0.995 angle 0
+    v_d = 0.995
+    v_q = 0
+
+    # Solve for intermediate params
+    x_p = x_s + (x_r * x_m) / (x_r + x_m)
+
+    z_in = ((r_s + 1j*x_s)
+            + (1j * x_m * (r_r + 1j*x_r)) / (r_r + 1j * (x_r + x_m)))
+
+    i = (v_d + 1j * v_q) / z_in
+    i_d = i.real
+    i_q = i.imag
+
+    term1 = (v_d - r_s * i_d + x_p * i_q) * i_d
+    term2 = (v_q - r_s * i_q - x_p * i_d) * i_q
+
+    torque = (term1 - term2) / w_s
+    print(f'Starting torque: {torque:.5f}')
+
+
 if __name__ == '__main__':
     # p1()
     # p2()
     # p3()
-    p4()
+    # p4()
+    p5()
