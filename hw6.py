@@ -1,7 +1,11 @@
+"""Module for homework 6. This is some of the crappiest code I've
+written in recent memory. Oh well.
+"""
 import cmath
 import numpy as np
 from hw1 import implicit_trapezoidal_integration, newton
 import pandas as pd
+
 
 def get_dq_matrix(delta):
     """Given delta in radians, get the dq matrix which transforms from
@@ -17,8 +21,11 @@ def get_dq_matrix(delta):
     )
 
 
-def get_norton_injection(psi_p_p_q, psi_p_p_d, omega, x_p_p):
-    return (-psi_p_p_q + 1j*psi_p_p_d) * omega / (1j * x_p_p)
+def get_dq(delta, n):
+    dq_mat = get_dq_matrix(delta)
+
+    ri = np.array([[n.real], [n.imag]])
+    return np.matmul(dq_mat, ri).flatten()
 
 
 # noinspection PyPep8Naming
@@ -39,8 +46,8 @@ def p1():
     X_d = 2.1
     X_q = 1.5
     X_p_d = 0.3
-    X_p_p_d = 0.18
-    X_p_p_q = 0.18
+    # X''_d = X''_q
+    X_p_p = 0.18
     X_l = 0.12
     T_p_do = 7
     T_pp_do = 0.035
@@ -72,25 +79,18 @@ def p1():
           f'{delta * 180 / cmath.pi:.2f} degrees.')
 
     # Convert to DQ
-    dq_mat = get_dq_matrix(delta)
-
-    V_ri = np.array([[V_t.real], [V_t.imag]])
-    V_dq = np.matmul(dq_mat, V_ri).flatten()
-
-    I_ri = np.array([[I_initial.real], [I_initial.imag]])
-    I_dq = np.matmul(dq_mat, I_ri).flatten()
+    V_dq = get_dq(delta=delta, n=V_t)
+    I_dq = get_dq(delta=delta, n=I_initial)
 
     print(f'[V_d, V_q]: {V_dq}')
     print(f'[I_d, I_q]: {I_dq}')
 
     # Compute E''
-    E_pp = V_t + (0 + 1j * X_p_p_d) * I_initial
-
+    E_pp = V_t + (0 + 1j * X_p_p) * I_initial
     print(f"E'': {E_pp:.2f}")
 
-    E_ri = np.array([[E_pp.real], [E_pp.imag]])
-    psi_pp = np.matmul(dq_mat, E_ri).flatten()
-
+    # Compute Psi''
+    psi_pp = get_dq(delta=delta, n=E_pp)
     print(f"[-Psi''_q, Psi''_d]: {psi_pp}")
 
     # Flip the sign on the initial element of psi_pp
@@ -99,9 +99,10 @@ def p1():
     # Time to solve the differential equations in the steady state
     # condition.
     I_d = I_dq[0]
+    psi_pp_q = psi_pp[0]
     psi_p_p_d = psi_pp[1]
-    a = (X_p_p_d - X_l) / (X_p_d - X_l)
-    b = (X_p_d - X_p_p_d) / (X_p_d - X_l)
+    a = (X_p_p - X_l) / (X_p_d - X_l)
+    b = (X_p_d - X_p_p) / (X_p_d - X_l)
 
     mat = np.array([
         [1, -1, 0],
@@ -122,23 +123,73 @@ def p1():
     psi_p_d = result[2]
 
     # At this point, we have all our initial conditions complete.
+    print('Initialization complete.')
+    print('*' * 80)
+    print('Fault time.')
 
-    # Get the generator Norton impedance.
-    gen_norton = 1 / (1j * X_p_p_d)
+    # Compute Thevenin voltage for faulted system.
+    x_line = line_imp.imag
+    x_line2 = x_line / 2
+    v_thev = x_line2 / (x_line + x_line2) * (1 + 1j * 0)
 
-    # Get line admittance.
-    line_adm = 1 / line_imp
-    # Create the three-bus Y-bus matrix for during our fault.
-    Y_bus_fault = np.array([
-        [gen_norton + line_adm + line_adm / 2, -line_adm / 2, -line_adm],
-        [-line_adm / 2, line_adm / 2 + line_adm / 2, -line_adm / 2],
-        [-line_adm, -line_adm / 2, line_adm + line_adm / 2]
-    ])
+    # Compute Thevenin impedance for faulted system.
+    x_thev = x_line * x_line2 / (x_line + x_line2)
 
-    # Use -1j * 1000 for the fault admittance.
-    Y_bus_fault[1, 1] += -1j * 1000
+    print(f'Thev V: {abs(v_thev):.2f}')
+    print(f'Thev X: {x_thev:.2f}')
 
-    print(f'Y-bus matrix during fault: {Y_bus_fault}')
+    # Compute the line current.
+    I_fault = (E_pp - v_thev) / (X_p_p + x_thev)
+
+    print(f'Initial fault current: {I_fault:.2f}')
+
+    # Compute terminal voltage.
+    V_t = E_pp - I_fault * X_p_p
+
+    print(f'Terminal voltage immediately following fault: {V_t:.2f}')
+
+    # Convert to DQ
+    V_dq = get_dq(delta=delta, n=V_t)
+    V_d = V_dq[0]
+    V_q = V_dq[1]
+    I_dq = get_dq(delta=delta, n=I_fault)
+    I_d = I_dq[0]
+    I_q = I_dq[1]
+
+    # Speed.
+    w = 2 * cmath.pi * 60
+    w_s = 2 * cmath.pi * 60
+
+    # Create function for computing the derivatives.
+    def der_f():
+
+        # Compute some terms to make the long diff'eq shorter.
+        term1 = (X_p_d - X_p_p) / (X_p_d - X_l) ** 2
+        term2 = (-psi_p_d - I_d * (X_p_d - X_l) + E_p_q)
+        term3 = (X_d - X_p_d)
+
+        return np.array([
+            (-psi_pp_q - I_d * (X_q - X_p_p)) / T_pp_qo,
+            (-psi_p_d - I_d * (X_p_d - X_l) + E_p_q) / T_pp_do,
+            -(((term1 * term2 + I_d) * term3 + E_p_q) + E_fd) / T_p_do,
+            w - w_s,
+            p_pu / (2*H) - (w_s / (2 * H)) * (psi_p_p_d * I_q - psi_pp_q * I_d)
+        ])
+
+    # Do Euler's with the differential equations for two time steps.
+    for _ in range(2):
+        x = np.array([psi_pp_q, psi_p_d, E_p_q, delta, w])
+        f_x = der_f()
+        x_t_p_1 = x + 0.01 * f_x
+
+        psi_pp_q = x_t_p_1[0]
+        psi_p_d = x_t_p_1[1]
+        E_p_q = x_t_p_1[2]
+        delta = x_t_p_1[3]
+        w = x_t_p_1[4]
+
+    x = np.array([psi_pp_q, psi_p_d, E_p_q, delta, w])
+    print(f'States after two steps of fault: {x}')
     pass
 
 
@@ -402,13 +453,13 @@ def p5():
     term1 = (v_d - r_s * i_d + x_p * i_q) * i_d
     term2 = (v_q - r_s * i_q - x_p * i_d) * i_q
 
-    torque = (term1 - term2) / w_s
+    torque = (term1 + term2) / w_s
     print(f'Starting torque: {torque:.5f}')
 
 
 if __name__ == '__main__':
-    # p1()
+    p1()
     # p2()
     # p3()
     # p4()
-    p5()
+    # p5()
