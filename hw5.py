@@ -1,4 +1,4 @@
-"""Module for homework 6. This is some of the crappiest code I've
+"""Module for homework 5. This is some of the crappiest code I've
 written in recent memory. Oh well.
 """
 import cmath
