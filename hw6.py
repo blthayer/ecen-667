@@ -1,13 +1,10 @@
 import numpy as np
-from scipy import optimize
-import matplotlib.pyplot as plt
-from hw1 import rk2
 
 
 def main():
-    # p1()
+    p1()
     p2()
-    # p6()
+    p6()
 
 
 def p1():
@@ -74,6 +71,8 @@ def _get_participation(a1):
 
 
 def p2():
+    print('*' * 80)
+    print('Problem 2')
     # Given parameters
     m = 0.0133
     p_m = 0.91
@@ -129,6 +128,8 @@ def p2():
 
 
 def p6():
+    print('*' * 80)
+    print('Problem 6')
     # Phase angles of vstab and speed
     vstab = -30.925
     speed = -45.306
